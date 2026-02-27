@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/auth/middleware';
 import { getAdminFirestore } from '@/lib/firebase/admin';
 import { writeAuditLog } from '@/lib/utils/audit-log';
+import { parseBody } from '@/lib/validations/parse';
+import { analyticsCreateSchema, impactMetricsSchema } from '@/lib/validations/schemas';
 import type { AnalyticsEntry, ImpactMetrics } from '@/types';
 
 // GET /api/analytics?campaignId=...&startDate=...&endDate=...
@@ -52,26 +54,28 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, ['admin', 'staff']);
   if (isAuthError(auth)) return auth;
 
-  const body = (await req.json()) as Omit<AnalyticsEntry, 'id'>;
-
-  if (!body.campaignId || !body.date) {
-    return NextResponse.json(
-      { success: false, error: 'campaignId and date are required' },
-      { status: 400 },
-    );
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
   }
+
+  const parsed = await parseBody(body, analyticsCreateSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const validated = parsed.data;
 
   const db  = getAdminFirestore();
   const ref = await db.collection('analytics').add({
-    campaignId:    body.campaignId,
-    date:          body.date,
-    reach:         Number(body.reach)       || 0,
-    engagement:    Number(body.engagement)  || 0,
-    followerCount: Number(body.followerCount) || 0,
+    campaignId:    validated.campaignId,
+    date:          validated.date,
+    reach:         validated.reach,
+    engagement:    validated.engagement,
+    followerCount: validated.followerCount,
   });
 
   const created = await ref.get();
-  await writeAuditLog(auth.user.uid, 'analytics.update', body.campaignId);
+  await writeAuditLog(auth.user.uid, 'analytics.update', validated.campaignId);
 
   return NextResponse.json({
     success: true,
@@ -84,29 +88,31 @@ export async function PUT(req: NextRequest) {
   const auth = await requireAuth(req, ['admin', 'staff']);
   if (isAuthError(auth)) return auth;
 
-  const body = (await req.json()) as Omit<ImpactMetrics, 'id'>;
-
-  if (!body.campaignId) {
-    return NextResponse.json(
-      { success: false, error: 'campaignId is required' },
-      { status: 400 },
-    );
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
   }
+
+  const parsed = await parseBody(body, impactMetricsSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const validated = parsed.data;
 
   const db = getAdminFirestore();
 
   // Check for existing entry
   const existing = await db
     .collection('impact_metrics')
-    .where('campaignId', '==', body.campaignId)
+    .where('campaignId', '==', validated.campaignId)
     .get();
 
   const data: Omit<ImpactMetrics, 'id'> = {
-    campaignId:          body.campaignId,
-    donationClicks:      Number(body.donationClicks)      || 0,
-    volunteerSignups:    Number(body.volunteerSignups)    || 0,
-    eventRegistrations:  Number(body.eventRegistrations)  || 0,
-    mediaMentions:       Number(body.mediaMentions)       || 0,
+    campaignId:          validated.campaignId,
+    donationClicks:      validated.donationClicks ?? 0,
+    volunteerSignups:    validated.volunteerSignups ?? 0,
+    eventRegistrations:  validated.eventRegistrations ?? 0,
+    mediaMentions:       validated.mediaMentions ?? 0,
   };
 
   let id: string;

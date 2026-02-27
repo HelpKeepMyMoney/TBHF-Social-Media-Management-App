@@ -18,10 +18,20 @@ const nextConfig = {
         protocol: 'https',
         hostname: '**.r2.cloudflarestorage.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+      },
     ],
   },
-  // Server-side only — never expose AI keys to client
-  serverExternalPackages: ['firebase-admin'],
+  // firebase-admin is auto-opted in Next.js 14; explicit config for clarity
+  experimental: {
+    serverComponentsExternalPackages: ['firebase-admin', 'sharp', '@aws-sdk/client-s3'],
+  },
 };
 
 export default nextConfig;

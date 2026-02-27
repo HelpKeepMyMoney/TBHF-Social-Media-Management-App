@@ -188,7 +188,7 @@ export interface BoardReport {
 
 // ─── Storage ─────────────────────────────────────────────────────────────────
 
-export type StorageProvider = 'vercel-blob' | 's3' | 'r2';
+export type StorageProvider = 'vercel-blob' | 's3' | 'r2' | 'firebase';
 
 export interface UploadResult {
   url: string;

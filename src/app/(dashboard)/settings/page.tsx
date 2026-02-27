@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/Toast';
@@ -16,15 +16,13 @@ import {
   query,
 } from 'firebase/firestore';
 import { getClientFirestore } from '@/lib/firebase/client';
-import { useEffect } from 'react';
 import {
   Shield,
   Users,
   Plus,
-  Trash2,
-  Settings as SettingsIcon,
+  FileText,
 } from 'lucide-react';
-import type { AppUser } from '@/types';
+import type { AppUser, AuditLogEntry } from '@/types';
 
 export default function SettingsPage() {
   const { user, isAdmin } = useAuth();
@@ -39,6 +37,10 @@ export default function SettingsPage() {
   const [newUserName,  setNewUserName]  = useState('');
   const [newUserRole,  setNewUserRole]  = useState<'admin' | 'staff' | 'board'>('staff');
   const [addingUser, setAddingUser]     = useState(false);
+
+  // Audit logs (admin only)
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [auditLogsLoading, setAuditLogsLoading] = useState(false);
 
   useEffect(() => {
     async function loadUsers() {
@@ -55,7 +57,23 @@ export default function SettingsPage() {
     }
     if (isAdmin) loadUsers();
     else setLoading(false);
-  }, [isAdmin]);
+  }, [isAdmin, toast]);
+
+  useEffect(() => {
+    async function loadAuditLogs() {
+      if (!isAdmin) return;
+      setAuditLogsLoading(true);
+      try {
+        const res = await apiFetch<AuditLogEntry[]>('/api/audit-logs?limit=50');
+        if (res.success) setAuditLogs(res.data);
+      } catch {
+        toast('error', 'Failed to load audit logs');
+      } finally {
+        setAuditLogsLoading(false);
+      }
+    }
+    loadAuditLogs();
+  }, [isAdmin, apiFetch, toast]);
 
   if (loading) return <PageLoader />;
 
@@ -139,6 +157,51 @@ export default function SettingsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Audit logs */}
+      <div className="card p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <FileText className="h-5 w-5 text-stone-400" />
+          <h3 className="section-heading">Audit Log</h3>
+        </div>
+        <p className="text-sm text-stone-500 mb-4">
+          Recent activity across campaigns, posts, AI usage, and exports.
+        </p>
+        {auditLogsLoading ? (
+          <p className="text-sm text-stone-400">Loading…</p>
+        ) : auditLogs.length === 0 ? (
+          <p className="text-sm text-stone-400">No audit entries yet.</p>
+        ) : (
+          <div className="overflow-x-auto max-h-64 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-stone-100 sticky top-0 bg-white">
+                  <th className="text-left font-medium text-stone-500 pb-2 pr-4">Time</th>
+                  <th className="text-left font-medium text-stone-500 pb-2 pr-4">Action</th>
+                  <th className="text-left font-medium text-stone-500 pb-2 pr-4">Resource</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-50">
+                {auditLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-stone-50/50">
+                    <td className="py-2 pr-4 text-stone-600 text-xs whitespace-nowrap">
+                      {formatDate(log.createdAt)}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <code className="text-xs bg-stone-100 px-1.5 py-0.5 rounded">
+                        {log.action}
+                      </code>
+                    </td>
+                    <td className="py-2 text-stone-500 text-xs">
+                      {log.resourceId ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Security info */}

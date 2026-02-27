@@ -33,7 +33,7 @@ export function useAuth() {
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
-        setState({ user: null, loading: false, token: null });
+        setState({ user: null, loading: false, token: null, networkError: false });
         router.push('/login');
         return;
       }

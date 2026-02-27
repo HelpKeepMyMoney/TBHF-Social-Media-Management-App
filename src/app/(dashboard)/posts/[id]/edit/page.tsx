@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,9 +11,10 @@ import { usePosts } from '@/hooks/usePosts';
 import { useApi } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
+import { PageLoader } from '@/components/ui/LoadingSpinner';
 import { ArrowLeft, Upload, X, Sparkles, ImageIcon } from 'lucide-react';
 import Link from 'next/link';
-import type { PostFormData } from '@/types';
+import type { Post, PostFormData } from '@/types';
 
 const schema = z.object({
   campaignId:    z.string().min(1, 'Select a campaign'),
@@ -35,13 +36,27 @@ const PLATFORMS = [
   { value: 'tiktok',    label: 'TikTok' },
 ];
 
-export default function NewPostPage() {
-  const router        = useRouter();
-  const searchParams  = useSearchParams();
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch {
+    return '';
+  }
+}
+
+export default function EditPostPage() {
+  const router   = useRouter();
+  const params   = useParams();
+  const id       = params?.id as string | undefined;
   const { campaigns } = useCampaigns();
-  const { createPost } = usePosts();
+  const { updatePost } = usePosts();
   const { apiFetch }  = useApi();
   const toast         = useToast();
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
@@ -49,26 +64,23 @@ export default function NewPostPage() {
   const [uploading, setUploading]   = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
 
-  // Pre-fill from AI Studio query params
-  const initialCaption  = searchParams.get('caption')  ?? '';
-  const initialMediaUrl = searchParams.get('mediaUrl') ?? '';
-  const initialMediaType = searchParams.get('mediaType') ?? 'none';
-  const initialCampaignId = searchParams.get('campaignId') ?? '';
-
   const {
     register,
     handleSubmit,
     setValue,
     watch,
+    reset,
     formState: { errors },
   } = useForm<FormValues>({
-    resolver:      zodResolver(schema),
+    resolver: zodResolver(schema),
     defaultValues: {
-      caption:    initialCaption,
-      mediaUrl:   initialMediaUrl,
-      mediaType:  (initialMediaType as 'image' | 'video' | 'none') || 'none',
-      campaignId: initialCampaignId,
-      status:     'draft',
+      campaignId: '',
+      caption:    '',
+      platform:  '',
+      mediaUrl:   '',
+      mediaType: 'none',
+      status:    'draft',
+      scheduledTime: null,
     },
   });
 
@@ -80,8 +92,35 @@ export default function NewPostPage() {
   const caption    = watch('caption');
 
   useEffect(() => {
-    if (initialMediaUrl) setPreviewUrl(initialMediaUrl);
-  }, [initialMediaUrl]);
+    if (!id) return;
+    let cancelled = false;
+    setLoading(true);
+    setNotFound(false);
+    apiFetch<Post>(`/api/posts/${id}`).then((res) => {
+      if (cancelled) return;
+      setLoading(false);
+      if (!res.success || !res.data) {
+        setNotFound(true);
+        return;
+      }
+      const post = res.data;
+      reset({
+        campaignId: post.campaignId,
+        caption:    post.caption,
+        platform:   post.platform,
+        mediaUrl:   post.mediaUrl ?? '',
+        mediaType:  post.mediaType ?? 'none',
+        status:     post.status,
+        scheduledTime: toDatetimeLocal(post.scheduledTime),
+      });
+      if (post.mediaUrl) setPreviewUrl(post.mediaUrl);
+    });
+    return () => { cancelled = true; };
+  }, [id, apiFetch, reset]);
+
+  useEffect(() => {
+    if (mediaUrl && !previewUrl) setPreviewUrl(mediaUrl);
+  }, [mediaUrl, previewUrl]);
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -95,7 +134,6 @@ export default function NewPostPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      // Get token from auth
       const { getClientAuth } = await import('@/lib/firebase/client');
       const token = await getClientAuth().currentUser?.getIdToken();
 
@@ -114,7 +152,7 @@ export default function NewPostPage() {
     } catch (err) {
       toast('error', err instanceof Error ? err.message : 'Upload failed');
       setUploadFile(null);
-      setPreviewUrl(initialMediaUrl);
+      setPreviewUrl(mediaUrl || '');
     } finally {
       setUploading(false);
     }
@@ -204,19 +242,39 @@ export default function NewPostPage() {
   }
 
   async function onSubmit(data: FormValues) {
+    if (!id) return;
     setSaving(true);
     try {
-      await createPost({
+      const scheduledTime = data.status === 'scheduled' && data.scheduledTime
+        ? new Date(data.scheduledTime).toISOString()
+        : null;
+      await updatePost(id, {
         ...data,
-        scheduledTime: data.status === 'scheduled' ? data.scheduledTime ?? null : null,
-      } as PostFormData);
-      toast('success', 'Post saved!');
+        scheduledTime,
+      } as Partial<PostFormData>);
+      toast('success', 'Post updated!');
       router.push('/posts');
     } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to save post');
+      toast('error', err instanceof Error ? err.message : 'Failed to update post');
     } finally {
       setSaving(false);
     }
+  }
+
+  if (loading) return <PageLoader />;
+
+  if (notFound || !id) {
+    return (
+      <div className="max-w-2xl">
+        <div className="card p-12 text-center">
+          <h3 className="font-semibold text-stone-700">Post not found</h3>
+          <p className="text-sm text-stone-400 mt-1">This post may have been deleted or you don&apos;t have access to it.</p>
+          <Link href="/posts" className="inline-block mt-4">
+            <Button variant="secondary">Back to posts</Button>
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -225,8 +283,8 @@ export default function NewPostPage() {
         <Link href="/posts" className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700 mb-4">
           <ArrowLeft className="h-3.5 w-3.5" /> Back to posts
         </Link>
-        <h2 className="text-xl font-bold text-stone-900">New Post</h2>
-        <p className="text-stone-500 text-sm mt-0.5">Compose a post and schedule it for publishing.</p>
+        <h2 className="text-xl font-bold text-stone-900">Edit Post</h2>
+        <p className="text-stone-500 text-sm mt-0.5">Update your post and schedule.</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="card p-6 space-y-5">
@@ -334,7 +392,6 @@ export default function NewPostPage() {
           )}
           {uploading && <p className="text-xs text-stone-400 mt-1">Uploading…</p>}
 
-          {/* Or enter URL */}
           <div className="mt-2">
             <input
               {...register('mediaUrl')}
@@ -362,7 +419,6 @@ export default function NewPostPage() {
           </div>
         </div>
 
-        {/* Schedule time (only when status = scheduled) */}
         {status === 'scheduled' && (
           <div>
             <label className="label block mb-1.5">Schedule Date & Time *</label>
@@ -374,9 +430,8 @@ export default function NewPostPage() {
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex gap-3 pt-2">
-          <Button type="submit" loading={saving}>Save Post</Button>
+          <Button type="submit" loading={saving}>Update Post</Button>
           <Link href="/posts">
             <Button variant="secondary">Cancel</Button>
           </Link>

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/auth/middleware';
 import { getAdminFirestore, getAdminAuth } from '@/lib/firebase/admin';
-import type { AppUser, UserRole } from '@/types';
+import { parseBody } from '@/lib/validations/parse';
+import { userCreateSchema } from '@/lib/validations/schemas';
+import type { AppUser } from '@/types';
 
 // POST /api/users — create Firestore user profile (admin only)
 // The Firebase Auth account must already exist. This creates the Firestore record.
@@ -9,32 +11,29 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, ['admin']);
   if (isAuthError(auth)) return auth;
 
-  const body = (await req.json()) as { name: string; email: string; role: UserRole };
-
-  if (!body.name || !body.email || !body.role) {
-    return NextResponse.json(
-      { success: false, error: 'name, email, and role are required' },
-      { status: 400 },
-    );
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const validRoles: UserRole[] = ['admin', 'staff', 'board'];
-  if (!validRoles.includes(body.role)) {
-    return NextResponse.json({ success: false, error: 'Invalid role' }, { status: 400 });
-  }
+  const parsed = await parseBody(body, userCreateSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const validated = parsed.data;
 
   try {
     // Look up the Firebase Auth user by email
     const adminAuth = getAdminAuth();
-    const firebaseUser = await adminAuth.getUserByEmail(body.email);
+    const firebaseUser = await adminAuth.getUserByEmail(validated.email);
 
     const db  = getAdminFirestore();
     const now = new Date().toISOString();
 
     const userData: Omit<AppUser, 'uid'> = {
-      name:      body.name.trim(),
-      email:     body.email.trim().toLowerCase(),
-      role:      body.role,
+      name:      validated.name,
+      email:     validated.email.toLowerCase(),
+      role:      validated.role,
       createdAt: now,
     };
 

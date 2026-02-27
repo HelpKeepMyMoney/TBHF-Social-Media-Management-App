@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/auth/middleware';
 import { getAdminFirestore } from '@/lib/firebase/admin';
 import { writeAuditLog } from '@/lib/utils/audit-log';
+import { parseBody } from '@/lib/validations/parse';
+import { campaignUpdateSchema } from '@/lib/validations/schemas';
 import type { Campaign } from '@/types';
 
 // GET /api/campaigns/[id]
@@ -41,11 +43,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 
-  const body = await req.json();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+  }
 
-  // Strip immutable fields
-  const { id: _id, createdBy: _cb, createdAt: _ca, ...updates } = body;
-  void _id; void _cb; void _ca;
+  const parsed = await parseBody(body, campaignUpdateSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const raw = parsed.data;
+  const updates = Object.fromEntries(
+    Object.entries(raw).filter(([, v]) => v !== undefined),
+  ) as Record<string, unknown>;
 
   await ref.update({ ...updates, updatedAt: new Date().toISOString() });
   const updated = await ref.get();

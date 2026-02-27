@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     default: 'TBHF Social Studio',
     template: '%s | TBHF Social Studio',
   },
-  description: 'Internal social media management platform for nonprofit campaign coordination.',
+  description: 'Internal social media management platform for The Black History Foundation (TBHF) campaign coordination.',
   robots: { index: false, follow: false }, // Internal tool — do not index
 };
 

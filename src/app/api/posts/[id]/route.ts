@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/auth/middleware';
 import { getAdminFirestore } from '@/lib/firebase/admin';
 import { writeAuditLog } from '@/lib/utils/audit-log';
+import { parseBody } from '@/lib/validations/parse';
+import { postUpdateSchema } from '@/lib/validations/schemas';
+import { deleteFileByUrl } from '@/lib/storage';
+import { appendTagline } from '@/lib/post-tagline';
 import type { Post } from '@/types';
 
 // GET /api/posts/[id]
@@ -37,9 +41,27 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 
-  const body = await req.json();
-  const { id: _id, createdBy: _cb, createdAt: _ca, ...updates } = body;
-  void _id; void _cb; void _ca;
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const parsed = await parseBody(body, postUpdateSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const raw = parsed.data;
+  const updates = Object.fromEntries(
+    Object.entries(raw).filter(([, v]) => v !== undefined),
+  ) as Record<string, unknown>;
+
+  if ('mediaUrl' in updates && updates.mediaUrl !== existing.mediaUrl && existing.mediaUrl) {
+    await deleteFileByUrl(existing.mediaUrl);
+  }
+
+  if ('caption' in updates && typeof updates.caption === 'string') {
+    updates.caption = appendTagline(updates.caption);
+  }
 
   await ref.update({ ...updates, updatedAt: new Date().toISOString() });
   const updated = await ref.get();
@@ -65,6 +87,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const existing = doc.data() as Omit<Post, 'id'>;
   if (auth.user.role === 'staff' && existing.createdBy !== auth.user.uid) {
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
+
+  if (existing.mediaUrl) {
+    await deleteFileByUrl(existing.mediaUrl);
   }
 
   await ref.delete();

@@ -5,13 +5,12 @@ import { getAdminFirestore } from '@/lib/firebase/admin';
 import { checkRateLimitAsync } from '@/lib/utils/rate-limit';
 import { writeAuditLog } from '@/lib/utils/audit-log';
 import { parseBody } from '@/lib/validations/parse';
-import { textGenerationSchema } from '@/lib/validations/schemas';
+import { captionGenerationSchema } from '@/lib/validations/schemas';
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, ['admin', 'staff']);
   if (isAuthError(auth)) return auth;
 
-  // Rate limiting
   const rl = await checkRateLimitAsync(auth.user.uid);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -33,29 +32,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const parsed = await parseBody(body, textGenerationSchema);
+  const parsed = await parseBody(body, captionGenerationSchema);
   if (parsed instanceof NextResponse) return parsed;
   const validated = parsed.data;
+
+  const mediaHint = validated.mediaType !== 'none'
+    ? ` (${validated.mediaType} post)` : '';
+  const topic = validated.topic || 'engaging social media post';
+  const context = validated.additionalContext
+    ? `${validated.additionalContext}${mediaHint}`
+    : mediaHint;
 
   try {
     const result = await generateSocialContent({
       campaignId: validated.campaignId,
-      topic: validated.topic,
-      contentType: validated.contentType,
+      topic,
+      contentType: 'social-post',
       tone: validated.tone ?? 'inspirational',
       platform: validated.platform,
-      wordLimit: validated.wordLimit ?? 150,
-      additionalContext: validated.additionalContext,
+      wordLimit: 120,
+      additionalContext: context.trim() || undefined,
     });
 
-    // Log generation to Firestore
     const db  = getAdminFirestore();
     const now = new Date().toISOString();
     await db.collection('ai_generations').add({
       userId:         auth.user.uid,
       campaignId:     validated.campaignId,
       generationType: 'text',
-      prompt:         `${validated.contentType} | ${validated.tone} | ${validated.topic}`,
+      prompt:         `caption | ${validated.tone} | ${topic}`,
       outputSummary:  result.caption.slice(0, 200),
       createdAt:      now,
     });
@@ -64,9 +69,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: result });
   } catch (err) {
-    console.error('[ai/text]', err);
+    console.error('[ai/caption]', err);
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'AI generation failed' },
+      { success: false, error: err instanceof Error ? err.message : 'AI caption generation failed' },
       { status: 500 },
     );
   }

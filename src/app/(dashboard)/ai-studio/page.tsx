@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Wand2, Image, Video, ArrowRight } from 'lucide-react';
+import { Wand2, Image as ImageIcon, Video, ArrowRight } from 'lucide-react';
 
 const tools = [
   {
@@ -12,7 +12,7 @@ const tools = [
   },
   {
     href:        '/ai-studio/image',
-    icon:        <Image  className="h-6 w-6" />,
+    icon:        <ImageIcon className="h-6 w-6" />,
     label:       'Image Generation',
     description: 'Create on-brand graphics, quote cards, and promotional artwork with DALL-E 3.',
     badge:       null,

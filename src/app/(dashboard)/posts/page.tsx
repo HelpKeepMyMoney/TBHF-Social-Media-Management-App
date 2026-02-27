@@ -126,13 +126,23 @@ export default function PostsPage() {
             <div key={post.id} className="card p-4 flex items-start gap-4">
               {/* Media preview */}
               {post.mediaUrl && post.mediaType === 'image' ? (
-                <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-stone-100 shrink-0">
+                <a
+                  href={post.mediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative w-16 h-16 rounded-lg overflow-hidden bg-stone-100 shrink-0 block cursor-pointer hover:opacity-90 transition-opacity"
+                >
                   <Image src={post.mediaUrl} alt="" fill className="object-cover" sizes="64px" />
-                </div>
-              ) : post.mediaType === 'video' ? (
-                <div className="w-16 h-16 rounded-lg bg-stone-800 flex items-center justify-center shrink-0">
+                </a>
+              ) : post.mediaUrl && post.mediaType === 'video' ? (
+                <a
+                  href={post.mediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-16 h-16 rounded-lg bg-stone-800 flex items-center justify-center shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                >
                   <Video className="h-6 w-6 text-stone-300" />
-                </div>
+                </a>
               ) : (
                 <div className="w-16 h-16 rounded-lg bg-stone-100 flex items-center justify-center shrink-0">
                   <ImageIcon className="h-6 w-6 text-stone-300" />

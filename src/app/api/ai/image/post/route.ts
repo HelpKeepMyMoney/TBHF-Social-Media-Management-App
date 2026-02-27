@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/auth/middleware';
-import { generateImage } from '@/lib/ai/dalle';
+import { generateImageForPost } from '@/lib/ai/dalle';
 import { getAdminFirestore } from '@/lib/firebase/admin';
 import { checkRateLimitAsync } from '@/lib/utils/rate-limit';
 import { writeAuditLog } from '@/lib/utils/audit-log';
 import { parseBody } from '@/lib/validations/parse';
-import { imageGenerationSchema } from '@/lib/validations/schemas';
+import { postImageGenerationSchema } from '@/lib/validations/schemas';
 
-// Image generation costs more — tighter rate limit (10/min)
 const IMAGE_RATE_LIMIT = 10;
 
 export async function POST(req: NextRequest) {
@@ -29,29 +28,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const parsed = await parseBody(body, imageGenerationSchema);
+  const parsed = await parseBody(body, postImageGenerationSchema);
   if (parsed instanceof NextResponse) return parsed;
   const validated = parsed.data;
 
   try {
-    const result = await generateImage({
+    const result = await generateImageForPost({
       campaignId: validated.campaignId,
-      visualType: validated.visualType,
-      style: validated.style ?? 'minimal',
+      caption: validated.caption,
+      platform: validated.platform,
       dimensions: validated.dimensions ?? '1:1',
-      prompt: validated.prompt,
-      additionalContext: validated.additionalContext,
+      visualType: validated.visualType ?? 'awareness-graphic',
+      style: validated.style ?? 'minimal',
     });
 
-    // Log to Firestore
     const db  = getAdminFirestore();
     const now = new Date().toISOString();
     await db.collection('ai_generations').add({
       userId:         auth.user.uid,
       campaignId:     validated.campaignId,
       generationType: 'image',
-      prompt:         validated.prompt.slice(0, 500),
-      outputSummary:  `${validated.visualType} — ${validated.style} (${validated.dimensions})`,
+      prompt:         `post-image | ${validated.caption.slice(0, 200)}`,
+      outputSummary:  result.storageUrl,
       mediaUrl:       result.storageUrl,
       createdAt:      now,
     });
@@ -62,9 +60,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: result });
   } catch (err) {
-    console.error('[ai/image]', err);
+    console.error('[ai/image/post]', err);
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'Image generation failed' },
+      { success: false, error: err instanceof Error ? err.message : 'AI image generation failed' },
       { status: 500 },
     );
   }

@@ -10,6 +10,7 @@ import type {
   ContentType,
   Platform,
 } from '@/types';
+import { POST_TAGLINE } from '@/lib/post-tagline';
 
 let client: Anthropic;
 
@@ -33,11 +34,11 @@ const TONE_DESCRIPTORS: Record<ContentTone, string> = {
 };
 
 const PLATFORM_GUIDANCE: Record<Platform, string> = {
-  instagram:  'Use emojis tastefully. Hashtags at the end. 2,200 char max. Strong hook in first line.',
-  facebook:   'Longer-form friendly. Include a clear CTA. 63,206 char max. Encourage sharing.',
-  twitter:    'Keep under 280 characters. Punchy and direct. 1–2 hashtags max.',
-  linkedin:   'Professional yet human tone. Include data/impact. Use line breaks for readability.',
-  tiktok:     'Casual, trend-aware, energetic. Keep captions short. Focus on the hook.',
+  instagram:  'Use emojis tastefully. Always place hashtags at the end. 2,200 char max. Strong hook in first line.',
+  facebook:   'Longer-form friendly. Include a clear CTA. Always place hashtags at the end. 63,206 char max. Encourage sharing.',
+  twitter:    'Keep under 280 characters. Punchy and direct. 1–2 hashtags max. Always place hashtags at the end.',
+  linkedin:   'Professional yet human tone. Include data/impact. Use line breaks for readability. Always place hashtags at the end.',
+  tiktok:     'Casual, trend-aware, energetic. Keep captions short. Focus on the hook. Always place hashtags at the end.',
 };
 
 const CONTENT_TYPE_GUIDANCE: Record<ContentType, string> = {
@@ -50,7 +51,7 @@ const CONTENT_TYPE_GUIDANCE: Record<ContentType, string> = {
 };
 
 function buildSystemPrompt(): string {
-  return `You are a mission-driven content strategist for a nonprofit organization.
+  return `You are a mission-driven content strategist for The Black History Foundation (TBHF), a nonprofit organization.
 Your role is to craft authentic, compelling social media content that:
 - Reflects the organization's values and voice
 - Inspires action (donations, volunteering, engagement)
@@ -71,13 +72,19 @@ function buildUserPrompt(req: TextGenerationRequest): string {
 **Target Platform:** ${req.platform} — ${PLATFORM_GUIDANCE[req.platform]}
 **Word Limit:** Approximately ${req.wordLimit} words for the main caption
 
+**Required format rules:**
+1. The caption MUST end with this tagline (include it verbatim): "${POST_TAGLINE}"
+2. Place the tagline at the end of the caption, immediately before the hashtags.
+3. Hashtags MUST use #word format — each hashtag must start with #. Example: ["#BlackHistory", "#TBHF"]
+4. Do NOT put bare keywords or tags at the end without the # symbol. Only proper hashtags (#word) may appear at the end.
+
 Return a JSON object with exactly this structure:
 {
-  "caption": "The primary post caption optimized for ${req.platform}",
+  "caption": "The primary post caption ending with the tagline: ${POST_TAGLINE}",
   "shortVersion": "A condensed version under 50 words",
   "longVersion": "An expanded version suitable for a newsletter or Facebook post (150–300 words)",
   "ctaSuggestions": ["CTA 1", "CTA 2", "CTA 3"],
-  "hashtags": ["hashtag1", "hashtag2", "hashtag3", "hashtag4", "hashtag5"]
+  "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
 }
 
 Return ONLY the JSON object. No markdown fences or extra text.`;
@@ -118,6 +125,11 @@ export async function generateSocialContent(
     throw new Error('Claude response missing required fields');
   }
 
+  // Ensure each hashtag has # prefix
+  parsed.hashtags = parsed.hashtags.map((h) =>
+    typeof h === 'string' && h.trim() && !h.startsWith('#') ? `#${h.trim()}` : String(h).trim(),
+  ).filter(Boolean);
+
   return parsed;
 }
 
@@ -137,7 +149,7 @@ export async function generateVideoScript(
     messages: [
       {
         role: 'user',
-        content: `Write a ${duration}-second video script for a nonprofit social media reel.
+        content: `Write a ${duration}-second video script for The Black History Foundation (TBHF) social media reel.
 Campaign: ${campaignContext}
 Topic: ${topic}
 

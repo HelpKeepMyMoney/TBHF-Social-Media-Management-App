@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isAuthError } from '@/lib/auth/middleware';
 import { getAdminFirestore } from '@/lib/firebase/admin';
 import { writeAuditLog } from '@/lib/utils/audit-log';
+import { parseQuery } from '@/lib/validations/parse';
+import { reportsExportQuerySchema } from '@/lib/validations/schemas';
 import type { Campaign, Post, AnalyticsEntry, ImpactMetrics, BoardReport } from '@/types';
 
 // GET /api/reports/export?format=json|csv&startDate=...&endDate=...
@@ -10,9 +12,9 @@ export async function GET(req: NextRequest) {
   if (isAuthError(auth)) return auth;
 
   const { searchParams } = new URL(req.url);
-  const format           = searchParams.get('format') ?? 'json';
-  const startDate        = searchParams.get('startDate') ?? '';
-  const endDate          = searchParams.get('endDate') ?? '';
+  const parsed = parseQuery(searchParams, reportsExportQuerySchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const { format, startDate, endDate } = parsed.data;
 
   const db = getAdminFirestore();
 
@@ -69,7 +71,7 @@ export async function GET(req: NextRequest) {
 
   const report: BoardReport = {
     generatedAt:          new Date().toISOString(),
-    dateRange:            { start: startDate, end: endDate },
+    dateRange:            { start: startDate ?? '', end: endDate ?? '' },
     campaigns:            campaignSummaries,
     totalPostsCreated:    posts.length,
     totalAIGenerations:   aiGenCount,
