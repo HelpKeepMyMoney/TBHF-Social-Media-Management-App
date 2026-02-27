@@ -1,0 +1,99 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ─────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && getUserRole() == 'admin';
+    }
+
+    function isStaff() {
+      return isSignedIn() && getUserRole() in ['admin', 'staff'];
+    }
+
+    function isAnyRole() {
+      return isSignedIn() && getUserRole() in ['admin', 'staff', 'board'];
+    }
+
+    function isOwner(resource) {
+      return resource.data.createdBy == request.auth.uid;
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────────
+    // Only allow reading own profile or admin reading all.
+    // All writes go through server-side Admin SDK.
+
+    match /users/{userId} {
+      allow read:  if isAnyRole() && (request.auth.uid == userId || isAdmin());
+      allow write: if false; // Server-side only via Admin SDK
+    }
+
+    // ── Campaigns ─────────────────────────────────────────────────────────────
+
+    match /campaigns/{campaignId} {
+      allow read:   if isAnyRole();
+      allow create: if isStaff();
+      allow update: if isStaff() && (isAdmin() || isOwner(resource));
+      allow delete: if isAdmin();
+    }
+
+    // ── Posts ─────────────────────────────────────────────────────────────────
+
+    match /posts/{postId} {
+      allow read:   if isAnyRole();
+      allow create: if isStaff();
+      allow update: if isStaff() && (isAdmin() || isOwner(resource));
+      allow delete: if isStaff() && (isAdmin() || isOwner(resource));
+    }
+
+    // ── AI Generations ────────────────────────────────────────────────────────
+    // Read: all authenticated. Write: server-side only.
+
+    match /ai_generations/{genId} {
+      allow read:  if isAnyRole();
+      allow write: if false; // Server-side only via Admin SDK
+    }
+
+    // ── Analytics ─────────────────────────────────────────────────────────────
+
+    match /analytics/{entryId} {
+      allow read:   if isAnyRole();
+      allow create: if isStaff();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Impact Metrics ────────────────────────────────────────────────────────
+
+    match /impact_metrics/{metricId} {
+      allow read:   if isAnyRole();
+      allow create: if isStaff();
+      allow update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ── Audit Logs ────────────────────────────────────────────────────────────
+    // Read: admin only. Write: server-side only.
+
+    match /audit_logs/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false; // Server-side only via Admin SDK
+    }
+
+    // ── Deny all other paths ──────────────────────────────────────────────────
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

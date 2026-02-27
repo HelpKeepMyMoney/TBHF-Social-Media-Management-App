@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 250 248 244;
+    --foreground: 28 25 23;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-surface-warm text-stone-900;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    @apply w-1.5;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-stone-300 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-stone-400;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl border border-stone-200 shadow-card;
+  }
+
+  .section-heading {
+    @apply text-lg font-semibold text-stone-800;
+  }
+
+  .label {
+    @apply text-sm font-medium text-stone-700;
+  }
+
+  .input-base {
+    @apply block w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900
+           placeholder-stone-400 shadow-sm transition-colors
+           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500
+           disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm
+           font-medium text-white shadow-sm transition-all
+           hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2
+           disabled:opacity-60 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white
+           px-4 py-2 text-sm font-medium text-stone-700 shadow-sm transition-all
+           hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2
+           disabled:opacity-60 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm
+           font-medium text-stone-600 transition-colors
+           hover:bg-stone-100 hover:text-stone-900
+           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2;
+  }
+}
+
+/* React Big Calendar overrides */
+.rbc-calendar {
+  @apply font-sans text-sm;
+}
+.rbc-header {
+  @apply py-2 font-medium text-stone-600 border-stone-200;
+}
+.rbc-today {
+  @apply bg-amber-50;
+}
+.rbc-event {
+  @apply bg-brand-500 border-brand-600 rounded text-xs;
+}
+.rbc-event.draft {
+  @apply bg-stone-400 border-stone-500;
+}
+.rbc-event.scheduled {
+  @apply bg-amber-500 border-amber-600;
+}
+.rbc-event.posted {
+  @apply bg-green-500 border-green-600;
+}
