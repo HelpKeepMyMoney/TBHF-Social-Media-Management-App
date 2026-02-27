@@ -1,6 +1,11 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  getFirestore,
+  persistentLocalCache,
+  type Firestore,
+} from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -33,7 +38,14 @@ export function getClientAuth(): Auth {
 
 export function getClientFirestore(): Firestore {
   if (!db) {
-    db = getFirestore(getFirebaseApp());
+    const app = getFirebaseApp();
+    if (typeof window !== 'undefined') {
+      // Browser: enable offline persistence so cached data is served when offline
+      db = initializeFirestore(app, { localCache: persistentLocalCache() });
+    } else {
+      // Server-side: no persistence needed
+      db = getFirestore(app);
+    }
   }
   return db;
 }

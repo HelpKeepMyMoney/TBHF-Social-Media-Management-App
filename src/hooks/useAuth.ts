@@ -5,6 +5,8 @@ import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import {
   doc,
   getDoc,
+  getDocFromCache,
+  type FirestoreError,
 } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { getClientAuth, getClientFirestore } from '@/lib/firebase/client';
@@ -14,14 +16,16 @@ interface AuthState {
   user: AppUser | null;
   loading: boolean;
   token: string | null;
+  networkError: boolean;
 }
 
 export function useAuth() {
   const router = useRouter();
   const [state, setState] = useState<AuthState>({
-    user:    null,
-    loading: true,
-    token:   null,
+    user:         null,
+    loading:      true,
+    token:        null,
+    networkError: false,
   });
 
   useEffect(() => {
@@ -37,12 +41,24 @@ export function useAuth() {
       try {
         const token = await firebaseUser.getIdToken();
         const db = getClientFirestore();
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+
+        let userDoc;
+        try {
+          userDoc = await getDoc(userDocRef);
+        } catch (fetchErr) {
+          // Firestore offline — try the local cache as a fallback
+          if ((fetchErr as FirestoreError).code === 'unavailable') {
+            userDoc = await getDocFromCache(userDocRef);
+          } else {
+            throw fetchErr;
+          }
+        }
 
         if (!userDoc.exists()) {
           // User exists in Auth but not Firestore — sign them out
           await firebaseSignOut(auth);
-          setState({ user: null, loading: false, token: null });
+          setState({ user: null, loading: false, token: null, networkError: false });
           router.push('/login');
           return;
         }
@@ -56,10 +72,16 @@ export function useAuth() {
           createdAt: data.createdAt ?? new Date().toISOString(),
         };
 
-        setState({ user, loading: false, token });
+        setState({ user, loading: false, token, networkError: false });
       } catch (err) {
+        if ((err as FirestoreError).code === 'unavailable') {
+          // Offline with no cached data — don't redirect to login
+          console.warn('[useAuth] Network unavailable and no cached profile.');
+          setState({ user: null, loading: false, token: null, networkError: true });
+          return;
+        }
         console.error('[useAuth] Failed to load user profile:', err);
-        setState({ user: null, loading: false, token: null });
+        setState({ user: null, loading: false, token: null, networkError: false });
       }
     });
 
@@ -83,9 +105,10 @@ export function useAuth() {
   }, []);
 
   return {
-    user:    state.user,
-    loading: state.loading,
-    token:   state.token,
+    user:         state.user,
+    loading:      state.loading,
+    token:        state.token,
+    networkError: state.networkError,
     signOut,
     getToken,
     isAdmin: state.user?.role === 'admin',

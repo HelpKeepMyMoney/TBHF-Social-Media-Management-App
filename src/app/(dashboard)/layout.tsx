@@ -7,12 +7,29 @@ import { useAuth } from '@/hooks/useAuth';
 import { PageLoader } from '@/components/ui/LoadingSpinner';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, networkError } = useAuth();
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface-warm">
         <PageLoader />
+      </div>
+    );
+  }
+
+  if (networkError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-warm">
+        <div className="text-center space-y-3">
+          <p className="text-lg font-semibold text-gray-800">Unable to connect</p>
+          <p className="text-sm text-gray-500">Check your internet connection and refresh the page.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-2 px-4 py-2 text-sm bg-primary text-white rounded-md hover:bg-primary/90"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
