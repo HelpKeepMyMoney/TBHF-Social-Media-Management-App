@@ -1,8 +1,21 @@
 # TBHF Social Studio
 
-**Internal social media management platform for nonprofit campaign coordination.**
+**Internal social media management platform for The Black History Foundation (TBHF) campaign coordination.**
+
+TBHF = The Black History Foundation.
 
 > An AI-powered, role-gated web application for planning campaigns, creating content, scheduling posts, tracking engagement, and generating board-ready reports.
+
+## Quick Start
+
+```bash
+git clone <your-repo-url>
+cd TBHF-Social-Media-Management-App
+npm install
+cp .env.local.example .env.local
+# Configure .env.local with your Firebase and API keys
+npm run dev
+```
 
 ---
 
@@ -34,17 +47,17 @@ src/
 │   │   ├── page.tsx          # Overview / main dashboard
 │   │   ├── campaigns/        # Campaign management
 │   │   ├── ai-studio/        # AI content creation (text, image, video)
-│   │   ├── posts/            # Post composer & list
+│   │   ├── posts/            # Post composer, list & edit
 │   │   ├── calendar/         # Calendar view of scheduled posts
 │   │   ├── analytics/        # Engagement & impact tracking
 │   │   ├── reports/          # Board PDF/CSV reports
 │   │   └── settings/         # User & system settings
 │   └── api/
-│       ├── ai/               # Claude text + DALL-E image + Pika video
+│       ├── ai/               # Claude text, DALL-E image, Pika video, caption
 │       ├── campaigns/        # Campaign CRUD
 │       ├── posts/            # Post CRUD
 │       ├── analytics/        # Analytics & impact metrics
-│       ├── media/upload/     # File upload handler
+│       ├── media/            # File upload & delete handlers
 │       ├── reports/export/   # Report generation (JSON/CSV)
 │       └── users/            # User profile management
 ├── components/
@@ -133,6 +146,18 @@ STORAGE_BUCKET=your-bucket-name
 STORAGE_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
 STORAGE_ACCESS_KEY_ID=...
 STORAGE_SECRET_ACCESS_KEY=...
+```
+
+*Option D: Firebase Storage*
+```
+STORAGE_PROVIDER=firebase
+# Uses FIREBASE_STORAGE_BUCKET or project default
+```
+
+**Upstash Redis (optional — for distributed rate limiting):**
+```
+UPSTASH_REDIS_REST_URL=...
+UPSTASH_REDIS_REST_TOKEN=...
 ```
 
 ### 3. Configure Firebase
